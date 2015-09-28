@@ -1,0 +1,21 @@
+{
+  "name": "flibusta_latest_rss_transformer",
+  "version": "1.0.0",
+  "description": "flibusta.net opds latest releases",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "flibusta",
+    "opds"
+  ],
+  "author": "SeregaLBN",
+  "license": "MIT",
+  "dependencies": {
+    "concat-stream": "^1.5.0",
+    "request": "^2.64.0",
+    "url": "^0.11.0",
+    "xml2js": "^0.4.12"
+  }
+}
