@@ -57,7 +57,7 @@ var nextNews = function(param) {
             }
 
             var entries = fullJson.feed.entry;
-            if (entries && entries.length) {
+            if (entries && entries.length && (!param.limit || (param.idPage < param.limit))) {
                 var any = false;
                 entries.forEach(function (entry) {
                     //console.log(JSON.stringify(entry));
@@ -127,6 +127,7 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
         aborted: false,
         idPage: 0,
         httpResponse: resp
+        , limit: 1
     };
     nextNews(param);
 
