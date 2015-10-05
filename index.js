@@ -3,8 +3,14 @@
 
 var http = require('http');
     url = require('url');
+var DownloaderLatestNews = require('./core');
 
 var server = http.createServer(function requestListenerCallback(reqst, resp) {
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // check arguments
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
     if (reqst.method !== 'GET') {
         resp.writeHead(404, {'content-type': 'text/plain'});
         resp.end("Illegal request method: " + reqst.method);
@@ -20,53 +26,50 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
         return;
     }
 
-    var param = {
-        aborted: false
-        //, limit: 1
-    };
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    var downloader = new DownloaderLatestNews();
+
+    downloader.on('error', function(err) {
+        console.error(err);
+        if (resp) {
+            resp.writeHead(500, {'Content-Type': 'application/json; charset=UTF-8'});
+            resp.end(JSON.stringify(err));
+        }
+    });
+
+    var totalCount = 0;
+    downloader.on('end', function() {
+        console.log("Finished...");
+        if (totalCount) {
+            resp.end(']');
+        } else {
+            resp.writeHead(503); // Service Unavailable
+            resp.end();
+        }
+    });
+
+    downloader.on('data', function(arrJson) {
+        //console.log(arrJson);
+        if (!totalCount) {
+            resp.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8'});
+            resp.write('[');
+        }
+
+        arrJson.forEach(function(jsnObj) {
+            if (totalCount)
+                resp.write(',');
+            resp.write(JSON.stringify(jsnObj));
+            totalCount++;
+        });
+    });
 
     console.log("Started...");
-    var totalCount = 0;
-    var transfer = require('./core')(
-        param,
-        function (err, arrJson) {
-            if (err) {
-                param.aborted = true;
-                console.error(err);
-                resp.writeHead(500, {'Content-Type': 'application/json; charset=UTF-8'});
-                resp.end(JSON.stringify(err));
-                return;
-            }
-
-            if (!arrJson) {
-                console.log("Finished...");
-                if (totalCount) {
-                    resp.end(']');
-                } else {
-                    resp.writeHead(503); // Service Unavailable
-                    resp.end();
-                }
-                return;
-            }
-
-            if (!totalCount) {
-                resp.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8'});
-                resp.write('[');
-            }
-
-            arrJson.forEach(function(jsnObj) {
-                if (totalCount)
-                    resp.write(',');
-                resp.write(JSON.stringify(jsnObj));
-                totalCount++;
-            });
-        });
+    downloader.start();
 
     reqst.connection.on('close', function() {
-        if (param.aborted)
-            return;
-        param.aborted = true;
-        console.error('Request connection aborted!');
+        resp = null;
+        downloader.abort(new Error('Request connection aborted!'));
     });
 });
 
