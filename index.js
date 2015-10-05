@@ -1,6 +1,7 @@
 //console.log(process.argv);
 //console.log('-------------------');
 
+var zlib = require('zlib');
 var http = require('http');
     url = require('url');
 var DownloaderLatestNews = require('./core');
@@ -38,11 +39,28 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
         }
     });
 
+    var acceptEncoding = reqst.headers['accept-encoding'];
+    if (!acceptEncoding) {
+        acceptEncoding = '';
+    }
+    var zlibDeflate = null;
+    var zlibGzip = null;
+    if (acceptEncoding.match(/\bdeflate\b/)) {
+        zlibDeflate = zlib.createDeflate();
+        zlibDeflate.pipe(resp);
+    } else if (acceptEncoding.match(/\bgzip\b/)) {
+        zlibGzip = zlib.createGzip();
+        zlibGzip.pipe(resp);
+    }
+
+    var wStream = zlibDeflate ? zlibDeflate : zlibGzip ? zlibGzip : resp;
+
     var totalCount = 0;
     downloader.on('end', function() {
-        console.log("Finished...");
+        console.log("Finished... Total objects: " + totalCount);
         if (totalCount) {
-            resp.end(']');
+            wStream.write(']');
+            wStream.end();
         } else {
             resp.writeHead(503); // Service Unavailable
             resp.end();
@@ -52,16 +70,22 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
     downloader.on('data', function(arrJson) {
         //console.log(arrJson);
         if (!totalCount) {
-            resp.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8'});
-            resp.write('[');
+            if (zlibDeflate) {
+                resp.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8', 'content-encoding': 'deflate'});
+            } else if (zlibGzip) {
+                resp.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8', 'content-encoding': 'gzip'});
+            } else {
+                resp.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8'});
+            }
+            wStream.write('[');
         }
 
         arrJson.forEach(function(jsnObj) {
             if (totalCount)
-                resp.write(',');
-            resp.write(JSON.stringify(jsnObj));
-            totalCount++;
+                wStream.write(',');
+            wStream.write(JSON.stringify(jsnObj));
         });
+        totalCount += arrJson.length;
     });
 
     console.log("Started...");
