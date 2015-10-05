@@ -1,8 +1,8 @@
 //console.log(process.argv);
 //console.log('-------------------');
 
-var zlib = require('zlib');
-var http = require('http');
+var zlib = require('zlib'),
+    http = require('http'),
     url = require('url');
 var DownloaderLatestNews = require('./core');
 
@@ -31,7 +31,7 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
 
     var downloader = new DownloaderLatestNews();
 
-    downloader.on('error', function(err) {
+    downloader.on('error', function (err) {
         console.error(err);
         if (resp) {
             resp.writeHead(500, {'Content-Type': 'application/json; charset=UTF-8'});
@@ -56,7 +56,7 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
     var wStream = zlibDeflate ? zlibDeflate : zlibGzip ? zlibGzip : resp;
 
     var totalCount = 0;
-    downloader.on('end', function() {
+    downloader.on('end', function () {
         console.log("Finished... Total objects: " + totalCount);
         if (totalCount) {
             wStream.write(']');
@@ -67,7 +67,7 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
         }
     });
 
-    downloader.on('data', function(arrJson) {
+    downloader.on('data', function (arrJson) {
         //console.log(arrJson);
         if (!totalCount) {
             if (zlibDeflate) {
@@ -80,7 +80,7 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
             wStream.write('[');
         }
 
-        arrJson.forEach(function(jsnObj) {
+        arrJson.forEach(function (jsnObj) {
             if (totalCount)
                 wStream.write(',');
             wStream.write(JSON.stringify(jsnObj));
@@ -91,13 +91,19 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
     console.log("Started...");
     downloader.start();
 
-    reqst.connection.on('close', function() {
+    reqst.connection.on('close', function () {
         resp = null;
         downloader.abort(new Error('Request connection aborted!'));
     });
 });
 
-server.listen(8083);
-console.log("Server has started.");
-
-
+var port = 8083;
+if (process.argv.length > 2) {
+    var _p = Number(process.argv[2]);
+    if (_p)
+        port = _p;
+}
+server.listen(port, function () {
+    var address = server.address();
+    console.log("Server started: port %j", address.port);
+});
