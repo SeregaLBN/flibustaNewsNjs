@@ -84,8 +84,8 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
             if (totalCount)
                 wStream.write(',');
             wStream.write(JSON.stringify(jsnObj));
+            ++totalCount;
         });
-        totalCount += arrJson.length;
     });
 
     console.log("Started...");
