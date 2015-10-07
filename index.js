@@ -114,7 +114,7 @@ var serverListener_LatestNews = function (reqst, resp, asXml) {
     });
 
     console.log("Started...");
-    downloader.start(2);
+    downloader.start();
 
     reqst.connection.on('close', function () {
         resp = null;
