@@ -28,7 +28,8 @@ function DownloaderLatestNews() {
     };
 
     this.nextStep = function() {
-        var url = 'http://flibusta.net/opds/new/' + this.idPage + '/new'; // http://flibusta.net/opds/new/0/new
+        var urlPrefix = 'http://flibusta.net';
+        var url = urlPrefix + '/opds/new/' + this.idPage + '/new'; // http://flibusta.net/opds/new/0/new
         console.log('...load  page: ' + url);
 
         var r = request.get(url);
@@ -60,7 +61,7 @@ function DownloaderLatestNews() {
 
                 var entries = fullJson.feed.entry;
                 if (entries && entries.length) {
-                    var transformedJson = entries.map(function (entry) {
+                    var transformedEntries = entries.map(function (entry) {
                         //console.log(JSON.stringify(entry));
                         return {
                             updated: entry.updated.pop(),
@@ -73,7 +74,14 @@ function DownloaderLatestNews() {
                             content: entry.content.pop()['_']
                         };
                     });
-                    self.emit('data', transformedJson);
+                    var resultJson = {
+                        title: fullJson.feed.title.pop(),
+                        updated: fullJson.feed.updated.pop(),
+                        icon: urlPrefix + fullJson.feed.icon.pop(),
+                        logo: urlPrefix + "/sites/default/files/bluebreeze_logo.png",
+                        entries: transformedEntries
+                    };
+                    self.emit('data', resultJson);
                     if (!self.aborted) {
                         ++self.idPage;
                         if (self.limit && (self.idPage >= self.limit)) {

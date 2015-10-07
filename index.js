@@ -58,15 +58,15 @@ var serverListener_LatestNews = function (reqst, resp, asXml) {
     var wStream = zlibDeflate ? zlibDeflate : zlibGzip ? zlibGzip : resp;
 
     var totalCount = 0;
-    var jsonRespForXml = [];
+    var jsonRespForXml;
     downloader.on('end', function () {
         console.log("Finished... Total objects: " + totalCount);
         if (totalCount) {
             if (asXml) {
-                var xml = js2xmlparser("latest", {entry: jsonRespForXml});
+                var xml = js2xmlparser("latest", jsonRespForXml);
                 wStream.write(xml);
             } else {
-                wStream.write(']');
+                wStream.write(']}'); // close array and close object
             }
             wStream.end();
         } else {
@@ -75,8 +75,9 @@ var serverListener_LatestNews = function (reqst, resp, asXml) {
         }
     });
 
-    downloader.on('data', function (arrJson) {
-        //console.log(arrJson);
+    downloader.on('data', function (resultJson) {
+        //console.log(resultJson);
+        var entries = resultJson.entries;
         if (!totalCount) {
             var ct = 'application/' + (asXml ? 'xml' : 'json') + '; charset=UTF-8';
             if (zlibDeflate) {
@@ -86,26 +87,34 @@ var serverListener_LatestNews = function (reqst, resp, asXml) {
             } else {
                 resp.writeHead(200, {'Content-Type': ct});
             }
-            if (!asXml) {
-                wStream.write('[');
+
+            if (asXml) {
+                jsonRespForXml = resultJson;
+                jsonRespForXml.entries = {entry: entries}; // hack to transform to xml
+            } else {
+                wStream.write('{"title":' + JSON.stringify(resultJson.title));
+                wStream.write(',"updated":' + JSON.stringify(resultJson.updated));
+                wStream.write(',"icon":' + JSON.stringify(resultJson.icon));
+                wStream.write(',"logo":' + JSON.stringify(resultJson.logo));
+                wStream.write(',"entries":[');
             }
         }
 
-        arrJson.forEach(function (jsnObj) {
+        entries.forEach(function (entry) {
             if (asXml) {
-                jsnObj.categories = {category: jsnObj.categories};
-                jsonRespForXml.push(jsnObj);
+                entry.categories = {category: entry.categories}; // hack to transform to xml
+                jsonRespForXml.entries.entry.push(entry);
             } else {
                 if (totalCount)
                     wStream.write(',');
-                wStream.write(JSON.stringify(jsnObj));
+                wStream.write(JSON.stringify(entry));
             }
             ++totalCount;
         });
     });
 
     console.log("Started...");
-    downloader.start();
+    downloader.start(2);
 
     reqst.connection.on('close', function () {
         resp = null;
