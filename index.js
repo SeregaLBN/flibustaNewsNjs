@@ -3,15 +3,11 @@
 
 var zlib = require('zlib'),
     http = require('http'),
-    url = require('url');
+    url = require('url'),
+    js2xmlparser = require("js2xmlparser");
 var DownloaderLatestNews = require('./core');
 
-var server = http.createServer(function requestListenerCallback(reqst, resp) {
-
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // check arguments
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+var serverListener = function (reqst, resp) {
     if (reqst.method !== 'GET') {
         resp.writeHead(404, {'content-type': 'text/plain'});
         resp.end("Illegal request method: " + reqst.method);
@@ -19,15 +15,21 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
         return;
     }
 
-    var urlObj = url.parse(reqst.url, true);
-    if (urlObj.pathname !== '/latest_news') {
-        resp.writeHead(404, {'content-type': 'text/plain'});
-        resp.end("Bad pathname: '" + urlObj.pathname + "';  known only '/latest_news'");
-        console.error("Bad pathname: " + urlObj.pathname);
-        return;
+    { // routers
+        var p = url.parse(reqst.url, true);
+        var urlPathName = p.pathname;
+        if (urlPathName === '/latest_news') {
+            var asXml = (p.query.xml !== undefined);
+            return serverListener_LatestNews(reqst, resp, asXml);
+        }
     }
 
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    resp.writeHead(404, {'content-type': 'text/plain'});
+    resp.end("Bad pathname: '" + urlPathName + "';  known only '/latest_news' or '/latest_news?xml'");
+    console.error("Bad pathname: " + urlPathName);
+};
+
+var serverListener_LatestNews = function (reqst, resp, asXml) {
 
     var downloader = new DownloaderLatestNews();
 
@@ -56,10 +58,16 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
     var wStream = zlibDeflate ? zlibDeflate : zlibGzip ? zlibGzip : resp;
 
     var totalCount = 0;
+    var jsonRespForXml = [];
     downloader.on('end', function () {
         console.log("Finished... Total objects: " + totalCount);
         if (totalCount) {
-            wStream.write(']');
+            if (asXml) {
+                var xml = js2xmlparser("latest", {entry: jsonRespForXml});
+                wStream.write(xml);
+            } else {
+                wStream.write(']');
+            }
             wStream.end();
         } else {
             resp.writeHead(503); // Service Unavailable
@@ -70,20 +78,28 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
     downloader.on('data', function (arrJson) {
         //console.log(arrJson);
         if (!totalCount) {
+            var ct = 'application/' + (asXml ? 'xml' : 'json') + '; charset=UTF-8';
             if (zlibDeflate) {
-                resp.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8', 'content-encoding': 'deflate'});
+                resp.writeHead(200, {'Content-Type': ct, 'content-encoding': 'deflate'});
             } else if (zlibGzip) {
-                resp.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8', 'content-encoding': 'gzip'});
+                resp.writeHead(200, {'Content-Type': ct, 'content-encoding': 'gzip'});
             } else {
-                resp.writeHead(200, {'Content-Type': 'application/json; charset=UTF-8'});
+                resp.writeHead(200, {'Content-Type': ct});
             }
-            wStream.write('[');
+            if (!asXml) {
+                wStream.write('[');
+            }
         }
 
         arrJson.forEach(function (jsnObj) {
-            if (totalCount)
-                wStream.write(',');
-            wStream.write(JSON.stringify(jsnObj));
+            if (asXml) {
+                jsnObj.categories = {category: jsnObj.categories};
+                jsonRespForXml.push(jsnObj);
+            } else {
+                if (totalCount)
+                    wStream.write(',');
+                wStream.write(JSON.stringify(jsnObj));
+            }
             ++totalCount;
         });
     });
@@ -95,7 +111,8 @@ var server = http.createServer(function requestListenerCallback(reqst, resp) {
         resp = null;
         downloader.abort(new Error('Request connection aborted!'));
     });
-});
+};
+
 
 var port = 8083;
 if (process.argv.length > 2) {
@@ -103,6 +120,7 @@ if (process.argv.length > 2) {
     if (_p)
         port = _p;
 }
+var server = http.createServer(serverListener);
 server.listen(port, function () {
     var address = server.address();
     console.log("Server started: port %j", address.port);
